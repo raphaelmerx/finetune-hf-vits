@@ -18,7 +18,7 @@ import os
 
 from accelerate import Accelerator, DistributedDataParallelKwargs
 from accelerate.utils import ProjectConfiguration, is_wandb_available, set_seed
-from datasets import DatasetDict, load_dataset
+from datasets import DatasetDict, load_dataset, load_from_disk
 from monotonic_align import maximum_path
 from tqdm.auto import tqdm
 
@@ -587,22 +587,28 @@ def main():
     raw_datasets = DatasetDict()
 
     if training_args.do_train:
-        raw_datasets["train"] = load_dataset(
-            data_args.dataset_name,
-            data_args.dataset_config_name,
-            split=data_args.train_split_name,
-            cache_dir=model_args.cache_dir,
-            token=model_args.token,
-        )
+        if data_args.dataset_name == "local_path":
+            raw_datasets["train"] = load_from_disk("./hf_dataset/train")
+        else:
+            raw_datasets["train"] = load_dataset(
+                data_args.dataset_name,
+                data_args.dataset_config_name,
+                split=data_args.train_split_name,
+                cache_dir=model_args.cache_dir,
+                token=model_args.token,
+            )
 
     if training_args.do_eval:
-        raw_datasets["eval"] = load_dataset(
-            data_args.dataset_name,
-            data_args.dataset_config_name,
-            split=data_args.eval_split_name,
-            cache_dir=model_args.cache_dir,
-            token=model_args.token,
-        )
+        if data_args.dataset_name == "local_path":
+            raw_datasets["eval"] = load_from_disk("./hf_dataset/test")
+        else:
+            raw_datasets["eval"] = load_dataset(
+                data_args.dataset_name,
+                data_args.dataset_config_name,
+                split=data_args.eval_split_name,
+                cache_dir=model_args.cache_dir,
+                token=model_args.token,
+            )
 
     if data_args.audio_column_name not in next(iter(raw_datasets.values())).column_names:
         raise ValueError(
@@ -731,7 +737,7 @@ def main():
 
         # process text inputs
         input_str = batch[text_column_name].lower() if do_lower_case else batch[text_column_name]
-        
+
         if is_uroman:
             input_str = uromanize(input_str, uroman_path=uroman_path)
         string_inputs = tokenizer(input_str, return_attention_mask=forward_attention_mask)
@@ -806,7 +812,7 @@ def main():
         trust_remote_code=model_args.trust_remote_code,
     )
 
-    
+
     with training_args.main_process_first(desc="apply_weight_norm"):
         # apply weight norms
         model.decoder.apply_weight_norm()
